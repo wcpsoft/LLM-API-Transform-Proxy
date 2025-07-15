@@ -1,0 +1,4 @@
+duckdb:
+  password: ''
+  path: /Users/zhangruixiang/aiworkspace/claude-code-proxy/db/api_log_test.duckdb
+  user: ''

@@ -1,0 +1,26 @@
+[project]
+name = "anthropic-proxy"
+version = "0.1.0"
+description = "Proxy that translates between Anthropic API and LiteLLM"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi[standard]>=0.115.11",
+    "uvicorn>=0.34.0",
+    "httpx>=0.25.0",
+    "pydantic>=2.0.0",
+    "litellm>=1.40.14",
+    "python-dotenv>=1.0.0",
+    "duckdb>=0.10.0",
+    "duckdb-engine>=0.10.0",
+    "pytest>=8.0.0",
+    "logru>=0.1.0",
+    "pytest-asyncio>=1.0.0",
+    "aiohttp==3.11.12",
+    "pytest-cov>=6.2.1",
+    "psutil>=7.0.0",
+]
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true

@@ -1,0 +1,10 @@
+# 运行模式
+MODE: "transformer" # transformer: 转换模式，direct: 直连模式
+
+# 服务配置
+PORT: 8082
+HOST: "0.0.0.0"
+DEBUG: false
+
+# 默认提供商（当无法匹配路由时使用）
+PREFERRED_PROVIDER: "openai"
