@@ -180,14 +180,20 @@ export default {
     }
 
     // 计算统计数据
-    const totalKeys = computed(() => apiKeys.value.length)
-    const activeKeys = computed(() => apiKeys.value.filter(key => key.is_active).length)
+    const totalKeys = computed(() => apiKeys.value.length || 0)
+    const activeKeys = computed(() => apiKeys.value.filter(key => key.is_active).length || 0)
     const totalRequests = computed(() => {
-      return apiKeys.value.reduce((sum, key) => sum + (key.requests_count || 0), 0)
+      return apiKeys.value.reduce((sum, key) => {
+        const requests = Number(key.requests_count) || 0
+        return sum + requests
+      }, 0)
     })
     const successRate = computed(() => {
       const total = totalRequests.value
-      const success = apiKeys.value.reduce((sum, key) => sum + (key.success_count || 0), 0)
+      const success = apiKeys.value.reduce((sum, key) => {
+        const successCount = Number(key.success_count) || 0
+        return sum + successCount
+      }, 0)
       return total > 0 ? Math.round((success / total) * 100) : 0
     })
 
@@ -306,8 +312,10 @@ export default {
     }
 
     const getSuccessRate = (key) => {
-      if (!key.requests_count || key.requests_count === 0) return 0
-      return Math.round((key.success_count / key.requests_count) * 100)
+      const requests = Number(key.requests_count) || 0
+      const success = Number(key.success_count) || 0
+      if (requests === 0) return 0
+      return Math.round((success / requests) * 100)
     }
 
     const formatDateTime = (datetime) => {

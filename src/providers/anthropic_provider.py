@@ -1,4 +1,4 @@
-from typing import Dict, Any, AsyncGenerator
+from typing import Dict, Any, AsyncGenerator, Optional
 from .base import BaseProvider
 
 class AnthropicProvider(BaseProvider):
@@ -15,6 +15,12 @@ class AnthropicProvider(BaseProvider):
     
     def get_endpoint_path(self) -> str:
         return "v1/messages"
+    
+    def build_url(self, api_base: Optional[str] = None) -> str:
+        """构建Anthropic API URL (支持beta=true查询参数)"""
+        base = api_base or self.api_base or self.get_default_endpoint()
+        url = f"{base.rstrip('/')}/{self.get_endpoint_path().lstrip('/')}"
+        return f"{url}?beta=true"
     
     def _convert_openai_to_anthropic(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """将OpenAI格式转换为Anthropic格式"""
@@ -66,5 +72,5 @@ class AnthropicProvider(BaseProvider):
             "anthropic-version": "2023-06-01"
         }
         
-        async for chunk in self.make_request(anthropic_request, custom_headers=custom_headers, stream=True):
+        async for chunk in await self.make_request(anthropic_request, custom_headers=custom_headers, stream=True):
             yield chunk

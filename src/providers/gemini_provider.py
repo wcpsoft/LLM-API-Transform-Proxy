@@ -72,7 +72,7 @@ class GeminiProvider(BaseProvider):
         
         try:
             gemini_request = self._convert_openai_to_gemini(request_data)
-            async for chunk in self.make_request(gemini_request, stream=True):
+            async for chunk in await self.make_request(gemini_request, stream=True):
                 yield chunk
         finally:
             # 恢复原始端点

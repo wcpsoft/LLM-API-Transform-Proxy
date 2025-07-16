@@ -30,7 +30,7 @@ class ApiKeyService:
         """创建API密钥"""
         try:
             # 验证提供商
-            valid_providers = ['openai', 'anthropic', 'gemini']
+            valid_providers = ['openai', 'anthropic', 'gemini', 'deepseek']
             if request.provider not in valid_providers:
                 raise ValueError(f"不支持的提供商: {request.provider}")
             
@@ -61,7 +61,7 @@ class ApiKeyService:
             if not existing_key:
                 raise ValueError("API密钥不存在")
             
-            success = ApiKeyDAO.update_api_key_status(key_id, request.is_active)
+            success = ApiKeyDAO.update_api_key_status(key_id, request.enabled)
             if not success:
                 raise ValueError("更新API密钥状态失败")
             
@@ -150,6 +150,8 @@ class ApiKeyService:
                 return api_key.startswith('sk-ant-') and len(api_key) > 30
             elif provider == 'gemini':
                 return len(api_key) > 20  # Google API keys are typically longer
+            elif provider == 'deepseek':
+                return api_key.startswith('sk-') and len(api_key) > 20  # DeepSeek uses similar format to OpenAI
             
             return True
         except Exception as e:

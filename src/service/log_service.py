@@ -28,7 +28,12 @@ class LogService:
         response_body: str = None,
         status_code: int = None,
         error_message: str = None,
-        processing_time: float = None
+        processing_time: float = None,
+        request_method: str = None,
+        client_ip: str = None,
+        user_agent: str = None,
+        provider: str = None,
+        **kwargs  # 接受额外的参数但忽略它们
     ) -> ApiRequestLog:
         """创建请求日志"""
         try:
@@ -142,7 +147,7 @@ class LogService:
             # 统计错误类型
             error_stats = {}
             for log in logs:
-                status_code = log.status_code or 'unknown'
+                status_code = log.get('status_code') or 'unknown'
                 if status_code not in error_stats:
                     error_stats[status_code] = {
                         'status_code': status_code,
@@ -190,7 +195,7 @@ class LogService:
             # 按API分组统计
             api_stats = {}
             for log in logs:
-                api_key = f"{log.source_api} -> {log.target_api}"
+                api_key = f"{log.get('source_api', 'unknown')} -> {log.get('target_api', 'unknown')}"
                 if api_key not in api_stats:
                     api_stats[api_key] = {
                         'api': api_key,
@@ -205,13 +210,15 @@ class LogService:
                 stat = api_stats[api_key]
                 stat['total_requests'] += 1
                 
-                if log.status_code and 200 <= log.status_code < 300:
+                status_code = log.get('status_code')
+                if status_code and 200 <= status_code < 300:
                     stat['success_requests'] += 1
                 else:
                     stat['error_requests'] += 1
                 
-                if log.processing_time:
-                    stat['total_processing_time'] += log.processing_time
+                processing_time = log.get('processing_time')
+                if processing_time:
+                    stat['total_processing_time'] += processing_time
             
             # 计算平均值和成功率
             for stat in api_stats.values():

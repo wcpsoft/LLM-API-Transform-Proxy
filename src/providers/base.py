@@ -53,9 +53,16 @@ class BaseProvider(ABC):
     
     def build_headers(self, custom_headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """构建请求头"""
+        # 支持两种格式：{api_key} 和 {key}
+        try:
+            auth_value = self.auth_format.format(api_key=self.api_key)
+        except KeyError:
+            # 如果 {api_key} 不存在，尝试使用 {key}
+            auth_value = self.auth_format.format(key=self.api_key)
+        
         headers = {
             "Content-Type": "application/json",
-            self.auth_header: self.auth_format.format(api_key=self.api_key)
+            self.auth_header: auth_value
         }
         
         if custom_headers:
@@ -67,16 +74,16 @@ class BaseProvider(ABC):
                           body: Dict[str, Any], 
                           custom_headers: Optional[Dict[str, str]] = None,
                           stream: bool = False,
-                          timeout: int = 30) -> Union[Dict[str, Any], AsyncGenerator[str, None]]:
+                          timeout: int = 600) -> Union[Dict[str, Any], AsyncGenerator[str, None]]:
         """发起API请求"""
         url = self.build_url()
         headers = self.build_headers(custom_headers)
         
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                if stream:
-                    return self._handle_stream_response(client, url, headers, body)
-                else:
+            if stream:
+                return self._handle_stream_response(url, headers, body, timeout)
+            else:
+                async with httpx.AsyncClient(timeout=timeout) as client:
                     return await self._handle_normal_response(client, url, headers, body)
         except httpx.TimeoutException as e:
             logger.error(f"请求超时: {url}")
@@ -104,12 +111,14 @@ class BaseProvider(ABC):
             raise Exception(f"API调用失败: {e.response.status_code}")
     
     async def _handle_stream_response(self, 
-                                    client: httpx.AsyncClient, 
                                     url: str, 
                                     headers: Dict[str, str], 
-                                    body: Dict[str, Any]) -> AsyncGenerator[Dict[str, Any], None]:
+                                    body: Dict[str, Any],
+                                    timeout: int = 600) -> AsyncGenerator[Dict[str, Any], None]:
         """处理流式响应"""
+        client = None
         try:
+            client = httpx.AsyncClient(timeout=timeout)
             async with client.stream('POST', url, headers=headers, json=body) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
@@ -123,6 +132,12 @@ class BaseProvider(ABC):
                             except json.JSONDecodeError:
                                 continue
         except httpx.HTTPStatusError as e:
-            error_text = e.response.text
-            logger.error(f"流式API调用失败: {e.response.status_code} - {error_text}")
-            raise Exception(f"流式API调用失败: {e.response.status_code}")
+            error_text = e.response.text if hasattr(e, 'response') else str(e)
+            logger.error(f"流式API调用失败: {e.response.status_code if hasattr(e, 'response') else 'Unknown'} - {error_text}")
+            raise Exception(f"流式API调用失败: {e.response.status_code if hasattr(e, 'response') else 'Unknown'}")
+        except Exception as e:
+            logger.error(f"流式响应处理失败: {e}")
+            raise
+        finally:
+            if client:
+                await client.aclose()

@@ -9,6 +9,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from src.config import get_config
@@ -16,6 +17,7 @@ from src.utils.db import init_db, init_default_system_configs
 from src.utils.logging import logger
 from src.controller.api_controller import router as api_router
 from src.controller.admin_controller import router as admin_router
+from src.controller.auth_controller import router as auth_router
 from src.service.system_config_service import SystemConfigService
 from src.middleware.exception_handler import ExceptionHandlerMiddleware, setup_exception_handlers
 from src.middleware.monitoring import setup_monitoring
@@ -94,13 +96,18 @@ async def verify_admin_key(
     return True
 
 
+# 挂载静态文件
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # 注册路由
 app.include_router(api_router, prefix="")
 app.include_router(admin_router, prefix="/v1/admin", dependencies=[Depends(verify_admin_key)])
+app.include_router(auth_router, prefix="/v1/auth")
 
 # 为前端添加/api前缀的路由
 app.include_router(api_router, prefix="/api")
 app.include_router(admin_router, prefix="/api/v1/admin", dependencies=[Depends(verify_admin_key)])
+app.include_router(auth_router, prefix="/api/v1/auth")
 
 
 # 健康检查

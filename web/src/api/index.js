@@ -7,9 +7,50 @@ const api = axios.create({
   timeout: 10000
 })
 
+// 认证管理
+const AUTH_KEY = 'admin_auth_key'
+const USER_TOKEN_KEY = 'auth_token'
+
+// 获取存储的认证密钥
+function getAdminKey() {
+  return localStorage.getItem(AUTH_KEY) || 'admin123'
+}
+
+// 设置认证密钥
+function setAdminKey(key) {
+  localStorage.setItem(AUTH_KEY, key)
+}
+
+// 获取用户认证token
+function getUserToken() {
+  return localStorage.getItem(USER_TOKEN_KEY)
+}
+
+// 设置用户认证token
+function setUserToken(token) {
+  localStorage.setItem(USER_TOKEN_KEY, token)
+}
+
+// 清除用户认证信息
+function clearUserAuth() {
+  localStorage.removeItem(USER_TOKEN_KEY)
+  localStorage.removeItem('user_info')
+}
+
 // 请求拦截器
 api.interceptors.request.use(
   config => {
+    // 为管理员API添加认证头
+    if (config.url && config.url.includes('/v1/admin/')) {
+      config.headers['X-Admin-Key'] = getAdminKey()
+    }
+    
+    // 为用户认证API添加Bearer token
+    const userToken = getUserToken()
+    if (userToken && !config.url?.includes('/v1/auth/login')) {
+      config.headers.Authorization = `Bearer ${userToken}`
+    }
+    
     return config
   },
   error => {
@@ -23,6 +64,17 @@ api.interceptors.response.use(
     return response.data
   },
   error => {
+    // 处理401未授权错误
+    if (error.response?.status === 401) {
+      clearUserAuth()
+      // 动态导入router避免循环依赖
+      import('@/router').then(({ default: router }) => {
+        if (router.currentRoute.value.path !== '/login') {
+          router.push('/login')
+        }
+      })
+    }
+    
     const message = error.response?.data?.detail || error.message || '请求失败'
     ElMessage.error(message)
     return Promise.reject(error)
@@ -56,7 +108,7 @@ export const modelApi = {
 export const apiKeyApi = {
   // 获取密钥统计
   getStats() {
-    return api.get('/v1/api-keys/stats')
+    return api.get('/v1/admin/api-keys/stats')
   },
   
   // 获取密钥列表
@@ -116,5 +168,36 @@ export const logApi = {
     return api.get('/v1/admin/stats', { params: { days } })
   }
 }
+
+// 用户认证API
+export const authApi = {
+  // 用户登录
+  login(data) {
+    return api.post('/v1/auth/login', data)
+  },
+  
+  // 用户退出
+  logout() {
+    return api.post('/v1/auth/logout')
+  },
+  
+  // 获取用户资料
+  getProfile() {
+    return api.get('/v1/auth/profile')
+  },
+  
+  // 验证token
+  validateToken() {
+    return api.get('/v1/auth/validate')
+  },
+  
+  // 修改密码
+  changePassword(data) {
+    return api.post('/v1/auth/change-password', data)
+  }
+}
+
+// 导出认证管理函数
+export { getAdminKey, setAdminKey, getUserToken, setUserToken, clearUserAuth }
 
 export default api

@@ -51,6 +51,24 @@ def init_default_models():
             "description": "Google Gemini Pro 模型，支持多模态",
             "enabled": True,
             "api_key": None
+        },
+        {
+            "route_key": "deepseek",
+            "target_model": "deepseek-chat",
+            "provider": "deepseek",
+            "prompt_keywords": "deepseek,推理,分析",
+            "description": "DeepSeek V3 模型，适用于推理和分析任务",
+            "enabled": True,
+            "api_key": None
+        },
+        {
+            "route_key": "deepseek-reasoner",
+            "target_model": "deepseek-reasoner",
+            "provider": "deepseek",
+            "prompt_keywords": "claude-4,推理,复杂分析",
+            "description": "DeepSeek R1 模型，适用于复杂推理任务",
+            "enabled": True,
+            "api_key": None
         }
     ]
     
@@ -106,6 +124,13 @@ def init_demo_api_keys():
         {
             "provider": "gemini",
             "api_key": "demo-gemini-key-replace-with-real-key",
+            "auth_header": "Authorization",
+            "auth_format": "Bearer {key}",
+            "is_active": False
+        },
+        {
+            "provider": "deepseek",
+            "api_key": "sk-demo-deepseek-key-replace-with-real-key",
             "auth_header": "Authorization",
             "auth_format": "Bearer {key}",
             "is_active": False

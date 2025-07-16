@@ -2,12 +2,14 @@ from .base import BaseProvider
 from .openai_provider import OpenAIProvider
 from .anthropic_provider import AnthropicProvider
 from .gemini_provider import GeminiProvider
+from .deepseek_provider import DeepSeekProvider
 
 # 提供商注册表
 PROVIDER_REGISTRY = {
     'openai': OpenAIProvider,
     'anthropic': AnthropicProvider,
-    'gemini': GeminiProvider
+    'gemini': GeminiProvider,
+    'deepseek': DeepSeekProvider
 }
 
 def get_provider(provider_name: str) -> BaseProvider:

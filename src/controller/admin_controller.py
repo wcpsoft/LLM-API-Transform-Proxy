@@ -248,8 +248,36 @@ async def get_stats(days: int = 7):
         error_stats = log_service.get_error_stats(days)
         performance_stats = log_service.get_api_performance_stats(days)
         
+        # 获取API密钥统计作为provider_stats
+        try:
+            api_key_stats = ApiKeyService.get_api_key_stats()
+            # 转换为前端期望的provider_stats格式
+            provider_stats = []
+            for provider, keys in api_key_stats.items():
+                if isinstance(keys, dict):
+                    total_keys = len(keys)
+                    active_keys = sum(1 for key_data in keys.values() if key_data.get('is_active', False))
+                    provider_stats.append({
+                        'provider': provider,
+                        'total_keys': total_keys,
+                        'active_keys': active_keys
+                    })
+        except Exception as e:
+            logger.warning(f"获取API密钥统计失败: {e}")
+            provider_stats = []
+        
+        # 确保daily_requests有正确的格式
+        daily_requests = []
+        if daily_stats:
+            for stat in daily_stats:
+                daily_requests.append({
+                    'date': stat.get('date', ''),
+                    'requests': stat.get('total_requests', 0) or 0
+                })
+        
         return {
-            'daily_requests': daily_stats,
+            'daily_requests': daily_requests,
+            'provider_stats': provider_stats,
             'model_usage': model_stats,
             'error_stats': error_stats,
             'api_performance': performance_stats
@@ -257,6 +285,17 @@ async def get_stats(days: int = 7):
     except Exception as e:
         logger.error(f"获取统计数据失败: {e}")
         raise HTTPException(status_code=500, detail="获取统计数据失败")
+
+
+@router.get("/api-keys/stats")
+async def get_api_key_stats():
+    """获取API密钥统计信息"""
+    try:
+        stats = ApiKeyService.get_api_key_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"获取API密钥统计失败: {e}")
+        raise HTTPException(status_code=500, detail="获取API密钥统计失败")
 
 
 # 安全管理

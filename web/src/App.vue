@@ -1,102 +1,13 @@
 <template>
   <div id="app">
-    <el-container class="layout-container">
-      <!-- 侧边栏 -->
-      <el-aside width="250px" class="sidebar">
-        <div class="logo">
-          <h2>Claude Proxy</h2>
-          <p>管理后台</p>
-        </div>
-        <el-menu
-          :default-active="$route.path"
-          router
-          class="sidebar-menu"
-          background-color="#304156"
-          text-color="#bfcbd9"
-          active-text-color="#409EFF"
-        >
-          <el-menu-item index="/dashboard">
-            <el-icon><DataAnalysis /></el-icon>
-            <span>仪表盘</span>
-          </el-menu-item>
-          <el-menu-item index="/models">
-            <el-icon><Setting /></el-icon>
-            <span>模型配置</span>
-          </el-menu-item>
-          <el-menu-item index="/api-keys">
-            <el-icon><Key /></el-icon>
-            <span>API密钥</span>
-          </el-menu-item>
-          <el-menu-item index="/routes">
-            <el-icon><Connection /></el-icon>
-            <span>API路由</span>
-          </el-menu-item>
-          <el-menu-item index="/logs">
-            <el-icon><Document /></el-icon>
-            <span>请求日志</span>
-          </el-menu-item>
-          <el-menu-item index="/service-status">
-            <el-icon><Monitor /></el-icon>
-            <span>服务状态</span>
-          </el-menu-item>
-        </el-menu>
-      </el-aside>
-
-      <!-- 主内容区 -->
-      <el-container>
-        <!-- 顶部导航 -->
-        <el-header class="header">
-          <div class="header-content">
-            <h3>{{ getPageTitle() }}</h3>
-            <div class="header-actions">
-              <el-button type="primary" @click="refreshData">
-                <el-icon><Refresh /></el-icon>
-                刷新
-              </el-button>
-            </div>
-          </div>
-        </el-header>
-
-        <!-- 主要内容 -->
-        <el-main class="main-content">
-          <router-view />
-        </el-main>
-      </el-container>
-    </el-container>
+    <!-- 路由视图 -->
+    <router-view />
   </div>
 </template>
 
 <script>
-import { ref } from 'vue'
-import { useRoute } from 'vue-router'
-
 export default {
-  name: 'App',
-  setup() {
-    const route = useRoute()
-
-    const getPageTitle = () => {
-      const titles = {
-        '/dashboard': '仪表盘',
-        '/models': '模型配置管理',
-        '/api-keys': 'API密钥管理',
-        '/routes': 'API路由管理',
-        '/logs': '请求日志',
-        '/service-status': '服务状态监控'
-      }
-      return titles[route.path] || 'Claude Code Proxy 管理后台'
-    }
-
-    const refreshData = () => {
-      // 触发当前页面数据刷新
-      window.location.reload()
-    }
-
-    return {
-      getPageTitle,
-      refreshData
-    }
-  }
+  name: 'App'
 }
 </script>
 
@@ -170,5 +81,30 @@ body {
 
 #app {
   height: 100vh;
+}
+
+/* 登录界面样式 */
+.login-container {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.login-card {
+  width: 400px;
+  padding: 40px;
+  text-align: center;
+}
+
+.login-card h2 {
+  color: #409EFF;
+  margin-bottom: 10px;
+}
+
+.login-card p {
+  color: #666;
+  margin-bottom: 30px;
 }
 </style>

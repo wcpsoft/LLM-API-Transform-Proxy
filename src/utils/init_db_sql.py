@@ -92,6 +92,31 @@ create_tables_sql = [
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(provider, api_key, date)
     );
+    ''',
+    '''
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(64) NOT NULL,
+        email VARCHAR(100),
+        is_active BOOLEAN DEFAULT TRUE,
+        is_admin BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    ''',
+    '''
+    CREATE TABLE IF NOT EXISTS user_sessions (
+        session_id VARCHAR(64) PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        username VARCHAR(50) NOT NULL,
+        login_timestamp INTEGER NOT NULL,
+        token_hash VARCHAR(64) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
     '''
 ]
 

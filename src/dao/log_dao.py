@@ -19,7 +19,12 @@ class LogDAO:
         response_body: str = None,
         status_code: int = None,
         error_message: str = None,
-        processing_time: float = None
+        processing_time: float = None,
+        request_method: str = None,
+        client_ip: str = None,
+        user_agent: str = None,
+        provider: str = None,
+        **kwargs  # 接受额外的参数但忽略它们
     ) -> None:
         """创建请求日志"""
         try:
@@ -41,25 +46,41 @@ class LogDAO:
                     db.execute("ALTER TABLE apirequestlog ADD COLUMN provider VARCHAR")
                 except:
                     pass  # 列已存在
+                try:
+                    db.execute("ALTER TABLE apirequestlog ADD COLUMN request_method VARCHAR")
+                except:
+                    pass  # 列已存在
+                try:
+                    db.execute("ALTER TABLE apirequestlog ADD COLUMN client_ip VARCHAR")
+                except:
+                    pass  # 列已存在
+                try:
+                    db.execute("ALTER TABLE apirequestlog ADD COLUMN user_agent VARCHAR")
+                except:
+                    pass  # 列已存在
                 
                 db.execute("""
                     INSERT INTO apirequestlog 
                     (timestamp, source_api, target_api, source_model, target_model, 
-                     headers, source_prompt, target_response, status_code, error_message, processing_time, provider)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     headers, source_prompt, target_response, status_code, error_message, 
+                     processing_time, provider, request_method, client_ip, user_agent)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, [
                     datetime.now(),
                     source_api,
                     target_api,
                     source_model,
                     target_model,
-                    request_headers,
+                    str(request_headers) if request_headers else None,
                     request_body,
                     response_body,
                     status_code,
                     error_message,
                     processing_time,
-                    target_model.split('/')[0] if target_model and '/' in target_model else 'unknown'
+                    provider or (target_model.split('/')[0] if target_model and '/' in target_model else 'unknown'),
+                    request_method,
+                    client_ip,
+                    user_agent
                 ])
         except Exception as e:
             logger.error(f"创建请求日志失败: {e}")

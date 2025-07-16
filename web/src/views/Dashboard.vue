@@ -183,25 +183,49 @@ export default {
         ])
 
         // 处理统计数据
-        if (statsData.daily_requests) {
+        if (statsData.daily_requests && Array.isArray(statsData.daily_requests)) {
           dailyRequests.value = statsData.daily_requests
-          stats.value.totalRequests = statsData.daily_requests.reduce((sum, item) => sum + item.requests, 0)
+          stats.value.totalRequests = statsData.daily_requests.reduce((sum, item) => {
+            const requests = Number(item.requests) || 0
+            return sum + requests
+          }, 0)
+        } else {
+          stats.value.totalRequests = 0
         }
 
-        if (statsData.provider_stats) {
+        if (statsData.provider_stats && Array.isArray(statsData.provider_stats)) {
           providerStats.value = statsData.provider_stats
-          stats.value.activeApiKeys = statsData.provider_stats.reduce((sum, item) => sum + item.active_keys, 0)
+          stats.value.activeApiKeys = statsData.provider_stats.reduce((sum, item) => {
+            const activeKeys = Number(item.active_keys) || 0
+            return sum + activeKeys
+          }, 0)
+        } else {
+          stats.value.activeApiKeys = 0
         }
 
         // 处理密钥统计
-        if (keyStats) {
+        if (keyStats && typeof keyStats === 'object') {
           const totalRequests = Object.values(keyStats).reduce((sum, provider) => {
-            return sum + Object.values(provider).reduce((pSum, key) => pSum + (key.requests || 0), 0)
+            if (provider && typeof provider === 'object') {
+              return sum + Object.values(provider).reduce((pSum, key) => {
+                const requests = Number(key.requests) || 0
+                return pSum + requests
+              }, 0)
+            }
+            return sum
           }, 0)
           const successRequests = Object.values(keyStats).reduce((sum, provider) => {
-            return sum + Object.values(provider).reduce((pSum, key) => pSum + (key.success || 0), 0)
+            if (provider && typeof provider === 'object') {
+              return sum + Object.values(provider).reduce((pSum, key) => {
+                const success = Number(key.success) || 0
+                return pSum + success
+              }, 0)
+            }
+            return sum
           }, 0)
           stats.value.successRate = totalRequests > 0 ? Math.round((successRequests / totalRequests) * 100) : 0
+        } else {
+          stats.value.successRate = 0
         }
 
         // 处理日志数据
@@ -219,12 +243,17 @@ export default {
     }
 
     const getBarHeight = (requests) => {
-      const maxRequests = Math.max(...dailyRequests.value.map(item => item.requests))
-      return maxRequests > 0 ? Math.max((requests / maxRequests) * 150, 10) : 10
+      if (!dailyRequests.value.length) return 10
+      const requestValues = dailyRequests.value.map(item => Number(item.requests) || 0)
+      const maxRequests = Math.max(...requestValues)
+      const currentRequests = Number(requests) || 0
+      return maxRequests > 0 ? Math.max((currentRequests / maxRequests) * 150, 10) : 10
     }
 
     const getProviderPercentage = (provider) => {
-      return provider.total_keys > 0 ? Math.round((provider.active_keys / provider.total_keys) * 100) : 0
+      const totalKeys = Number(provider.total_keys) || 0
+      const activeKeys = Number(provider.active_keys) || 0
+      return totalKeys > 0 ? Math.round((activeKeys / totalKeys) * 100) : 0
     }
 
     const formatDate = (date) => {
