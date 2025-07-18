@@ -2,20 +2,20 @@
 Chat completion service for handling chat completion requests.
 """
 
-from typing import Optional, Dict, Any, AsyncGenerator, Tuple, Type, Union
+from typing import Optional, Dict, Any, AsyncGenerator, Tuple, Type
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 import json
 import time
 import uuid
 
-from src.service.interfaces import IChatCompletionService, IModelService, IApiKeyService, ILogService
+from src.service.model_service import ModelService
+from src.service.api_key_service import ApiKeyService
 from src.service.model_transformer_service import ModelTransformerService
 from src.utils.logging import logger
 from src.utils.multimodal import MultimodalProcessor
 from src.providers.factory import ProviderFactory
 from src.adapters.base import APIAdapterStrategy
-from src.adapters.factory import AdapterFactory
 from src.core.errors.exceptions import (
     ProviderError,
     ValidationError,
@@ -23,18 +23,11 @@ from src.core.errors.exceptions import (
 )
 
 
-class ChatCompletionService(IChatCompletionService):
+class ChatCompletionService:
     """Chat completion service for handling chat completion requests."""
     
-    def __init__(self, model_service: IModelService, api_key_service: IApiKeyService, 
-                 log_service: ILogService, model_transformer_service=None):
-        """初始化聊天补全服务"""
-        self.model_service = model_service
-        self.api_key_service = api_key_service
-        self.log_service = log_service
-        self.model_transformer_service = model_transformer_service
-    
-    def get_provider_and_adapter(self, provider_name: str) -> Tuple[Type, Type[APIAdapterStrategy]]:
+    @staticmethod
+    def get_provider_and_adapter(provider_name: str) -> Tuple[Type, Type[APIAdapterStrategy]]:
         """
         Get provider and adapter classes for a provider.
         
@@ -47,6 +40,11 @@ class ChatCompletionService(IChatCompletionService):
         Raises:
             ValueError: If the provider is not supported
         """
+        from src.adapters.openai_adapter import OpenAIAdapter
+        from src.adapters.anthropic_adapter import AnthropicAdapter
+        from src.adapters.gemini_adapter import GeminiAdapter
+        from src.adapters.deepseek_adapter import DeepSeekAdapter
+        
         # Get provider class from factory registry
         provider_registry = ProviderFactory.get_registered_providers()
         if provider_name.lower() not in provider_registry:
@@ -54,16 +52,23 @@ class ChatCompletionService(IChatCompletionService):
         
         provider_class = provider_registry[provider_name.lower()]
         
-        # Get adapter class from factory registry
-        adapter_registry = AdapterFactory.get_registered_adapters()
-        if provider_name.lower() not in adapter_registry:
+        # Map provider to adapter
+        adapter_map = {
+            'openai': OpenAIAdapter,
+            'anthropic': AnthropicAdapter,
+            'gemini': GeminiAdapter,
+            'deepseek': DeepSeekAdapter
+        }
+        
+        if provider_name.lower() not in adapter_map:
             raise ValueError(f"No adapter available for provider: {provider_name}")
         
-        adapter_class = adapter_registry[provider_name.lower()]
+        adapter_class = adapter_map[provider_name.lower()]
         
         return provider_class, adapter_class
     
-    async def preprocess_multimodal_request(self, request_data: dict) -> dict:
+    @staticmethod
+    async def preprocess_multimodal_request(request_data: dict) -> dict:
         """
         Preprocess a multimodal request.
         
@@ -109,8 +114,8 @@ class ChatCompletionService(IChatCompletionService):
                 details={"error": str(e)}
             )
     
+    @staticmethod
     def log_request(
-        self,
         source_model: str,
         target_model: str,
         provider: str,
@@ -157,7 +162,9 @@ class ChatCompletionService(IChatCompletionService):
             )
             
             # Log to database
-            self.log_service.create_request_log(
+            from src.service.log_service import LogService
+            log_service = LogService()
+            log_service.create_request_log(
                 source_api=source_api,
                 target_api=target_api,
                 source_model=source_model,
@@ -171,10 +178,9 @@ class ChatCompletionService(IChatCompletionService):
                 request_id=request_id
             )
         except Exception as e:
-            logger.error(f"Failed to log request: {e}")
-
+            logger.error(f"Failed to log request: {e}")    @st
+aticmethod
     async def create_stream_response(
-        self,
         source_model: str,
         processed_request: dict,
         request_data: dict,
@@ -212,7 +218,7 @@ class ChatCompletionService(IChatCompletionService):
             try:
                 # Get model configuration
                 if use_transformer:
-                    selected_model = self.model_transformer_service.find_best_model(source_model, enable_transformer=True)
+                    selected_model = ModelTransformerService.find_best_model(source_model, enable_transformer=True)
                     if not selected_model:
                         raise ServiceUnavailableError(
                             message=f"Model '{source_model}' not found",
@@ -223,7 +229,7 @@ class ChatCompletionService(IChatCompletionService):
                     provider_name = selected_model['provider']
                     
                     # Get API key
-                    selected_key = self.model_transformer_service.get_available_api_key(provider_name)
+                    selected_key = ModelTransformerService.get_available_api_key(provider_name)
                     if not selected_key:
                         raise ServiceUnavailableError(
                             message=f"No available {provider_name} API key",
@@ -231,7 +237,7 @@ class ChatCompletionService(IChatCompletionService):
                         )
                 else:
                     # Route to specific model by provider
-                    models = self.model_service.get_models_by_route_key(provider_route_key)
+                    models = ModelService.get_models_by_route_key(provider_route_key)
                     if not models:
                         raise ServiceUnavailableError(
                             message=f"No available models for route key '{provider_route_key}'",
@@ -243,7 +249,7 @@ class ChatCompletionService(IChatCompletionService):
                     provider_name = selected_model['provider']
                     
                     # Get API key
-                    api_keys = self.api_key_service.get_active_keys_by_provider(provider_name)
+                    api_keys = ApiKeyService.get_active_keys_by_provider(provider_name)
                     if not api_keys:
                         raise ServiceUnavailableError(
                             message=f"No available {provider_name} API key",
@@ -252,7 +258,7 @@ class ChatCompletionService(IChatCompletionService):
                     selected_key = api_keys[0]
                 
                 # Get provider and adapter
-                provider_class, adapter_class = self.get_provider_and_adapter(provider_name)
+                provider_class, adapter_class = ChatCompletionService.get_provider_and_adapter(provider_name)
                 
                 # Create provider instance using factory
                 provider_config = {
@@ -264,8 +270,8 @@ class ChatCompletionService(IChatCompletionService):
                 
                 stream_provider = ProviderFactory.create_provider(provider_name, **provider_config)
                 
-                # Create adapter instance using factory
-                stream_adapter = AdapterFactory.create_adapter(provider_name)
+                # Create adapter instance
+                stream_adapter = adapter_class()
                 
                 # Adapt request
                 stream_adapted_request = stream_adapter.adapt_request(processed_request, target_model)
@@ -285,11 +291,11 @@ class ChatCompletionService(IChatCompletionService):
                 yield "data: [DONE]\n\n"
                 
                 # Update API key statistics
-                self.api_key_service.update_key_stats(selected_key['id'], success=True)
+                ApiKeyService.update_key_stats(selected_key['id'], success=True)
                 
                 # Log request
                 processing_time = time.time() - start_time
-                self.log_request(
+                ChatCompletionService.log_request(
                     source_model=source_model,
                     target_model=target_model,
                     provider=provider_name,
@@ -307,7 +313,7 @@ class ChatCompletionService(IChatCompletionService):
                 # Try to update statistics if key exists
                 try:
                     if selected_key:
-                        self.api_key_service.update_key_stats(selected_key['id'], success=False)
+                        ApiKeyService.update_key_stats(selected_key['id'], success=False)
                 except Exception:
                     pass
                 
@@ -329,10 +335,9 @@ class ChatCompletionService(IChatCompletionService):
             generate_response(),
             media_type="text/plain",
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
-        )
-
+        )    @st
+aticmethod
     async def create_non_stream_response(
-        self,
         source_model: str,
         processed_request: dict,
         request_data: dict,
@@ -366,7 +371,7 @@ class ChatCompletionService(IChatCompletionService):
         
         # Get model configuration
         if use_transformer:
-            selected_model = self.model_transformer_service.find_best_model(source_model, enable_transformer=True)
+            selected_model = ModelTransformerService.find_best_model(source_model, enable_transformer=True)
             if not selected_model:
                 raise HTTPException(status_code=404, detail=f"Model '{source_model}' not found")
             
@@ -374,12 +379,12 @@ class ChatCompletionService(IChatCompletionService):
             provider_name = selected_model['provider']
             
             # Get API key
-            selected_key = self.model_transformer_service.get_available_api_key(provider_name)
+            selected_key = ModelTransformerService.get_available_api_key(provider_name)
             if not selected_key:
                 raise HTTPException(status_code=503, detail=f"No available {provider_name} API key")
         else:
             # Route to specific model by provider
-            models = self.model_service.get_models_by_route_key(provider_route_key)
+            models = ModelService.get_models_by_route_key(provider_route_key)
             if not models:
                 raise HTTPException(status_code=404, detail=f"No available models for route key '{provider_route_key}'")
             
@@ -388,13 +393,13 @@ class ChatCompletionService(IChatCompletionService):
             provider_name = selected_model['provider']
             
             # Get API key
-            api_keys = self.api_key_service.get_active_keys_by_provider(provider_name)
+            api_keys = ApiKeyService.get_active_keys_by_provider(provider_name)
             if not api_keys:
                 raise HTTPException(status_code=503, detail=f"No available {provider_name} API key")
             selected_key = api_keys[0]
         
         # Get provider and adapter
-        provider_class, adapter_class = self.get_provider_and_adapter(provider_name)
+        provider_class, adapter_class = ChatCompletionService.get_provider_and_adapter(provider_name)
         
         # Create provider instance using factory
         provider_config = {
@@ -406,8 +411,8 @@ class ChatCompletionService(IChatCompletionService):
         
         provider = ProviderFactory.create_provider(provider_name, **provider_config)
         
-        # Create adapter instance using factory
-        adapter = AdapterFactory.create_adapter(provider_name)
+        # Create adapter instance
+        adapter = adapter_class()
         
         # Adapt request
         adapted_request = adapter.adapt_request(processed_request, target_model)
@@ -424,11 +429,11 @@ class ChatCompletionService(IChatCompletionService):
             adapted_response = adapter.adapt_response(response)
         
         # Update API key statistics
-        self.api_key_service.update_key_stats(selected_key['id'], success=True)
+        ApiKeyService.update_key_stats(selected_key['id'], success=True)
         
         # Log request
         processing_time = time.time() - start_time
-        self.log_request(
+        ChatCompletionService.log_request(
             source_model=source_model,
             target_model=target_model,
             provider=provider_name,
@@ -441,10 +446,9 @@ class ChatCompletionService(IChatCompletionService):
             request_id=request_id
         )
         
-        return adapted_response
-        
+        return adapted_response    
+@staticmethod
     async def handle_chat_completion(
-        self,
         request_data: dict,
         start_time: float,
         source_api: str = "/v1/chat/completions",
@@ -452,7 +456,7 @@ class ChatCompletionService(IChatCompletionService):
         provider_route_key: Optional[str] = None,
         anthropic_format: bool = False,
         request_id: str = None
-    ) -> Union[StreamingResponse, Dict[str, Any]]:
+    ):
         """
         Handle a chat completion request.
         
@@ -488,11 +492,11 @@ class ChatCompletionService(IChatCompletionService):
                 )
             
             # Preprocess multimodal content
-            processed_request = self.preprocess_multimodal_request(request_data)
+            processed_request = await ChatCompletionService.preprocess_multimodal_request(request_data)
             
             # Choose processing method based on streaming flag
             if request_data.get('stream', False):
-                return await self.create_stream_response(
+                return await ChatCompletionService.create_stream_response(
                     source_model=source_model,
                     processed_request=processed_request,
                     request_data=request_data,
@@ -504,7 +508,7 @@ class ChatCompletionService(IChatCompletionService):
                     request_id=request_id
                 )
             else:
-                return await self.create_non_stream_response(
+                return await ChatCompletionService.create_non_stream_response(
                     source_model=source_model,
                     processed_request=processed_request,
                     request_data=request_data,
@@ -529,14 +533,15 @@ class ChatCompletionService(IChatCompletionService):
             # Log unexpected errors
             logger.error(f"Chat completion request failed: {e}")
             processing_time = time.time() - start_time
-            self.log_request(
+            ChatCompletionService.log_request(
                 source_model=request_data.get('model', 'unknown'),
                 target_model='unknown',
-                provider_name='unknown',
+                provider='unknown',
                 request_data=request_data,
                 response_data=None,
+                status_code=500,
+                error_message=str(e),
                 processing_time=processing_time,
-                success=False,
                 source_api=source_api,
                 request_id=request_id
             )

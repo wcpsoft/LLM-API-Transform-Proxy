@@ -19,6 +19,7 @@ dependencies = [
     "aiohttp==3.11.12",
     "pytest-cov>=6.2.1",
     "psutil>=7.0.0",
+    "cryptography>=41.0.0",
 ]
 
 [[tool.uv.index]]

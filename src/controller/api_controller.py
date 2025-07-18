@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
-from src.service.model_service import ModelService
-from src.service.api_key_service import ApiKeyService
-from src.service.chat_completion_service import ChatCompletionService
+from fastapi import APIRouter, Request
+from src.service.factory import service_factory
 from src.utils.logging import logger
 from datetime import datetime
 import time
@@ -19,7 +18,8 @@ async def chat_completions(request: Request):
     request_data = await request.json()
     logger.info(f"请求数据: {request_data}")
     
-    return await ChatCompletionService.handle_chat_completion(
+    chat_service = service_factory.get_chat_completion_service()
+    return await chat_service.handle_chat_completion(
         request_data=request_data,
         start_time=start_time,
         source_api="/v1/chat/completions",
@@ -35,7 +35,8 @@ async def provider_completions(provider_name: str, request: Request):
     request_data = await request.json()
     logger.info(f"请求数据: {request_data}")
     
-    return await ChatCompletionService.handle_chat_completion(
+    chat_service = service_factory.get_chat_completion_service()
+    return await chat_service.handle_chat_completion(
         request_data=request_data,
         start_time=start_time,
         source_api=f"/v1/provider/{provider_name}/completions",
@@ -56,7 +57,8 @@ async def anthropic_messages(request: Request):
     if 'model' not in request_data:
         request_data['model'] = 'claude-3-sonnet-20240229'
     
-    return await ChatCompletionService.handle_chat_completion(
+    chat_service = service_factory.get_chat_completion_service()
+    return await chat_service.handle_chat_completion(
         request_data=request_data,
         start_time=start_time,
         source_api="/v1/messages",
@@ -68,7 +70,8 @@ async def anthropic_messages(request: Request):
 async def list_models():
     """列出所有可用模型"""
     try:
-        models_and_providers = ModelService.get_all_models_and_providers()
+        model_service = service_factory.get_model_service()
+        models_and_providers = model_service.get_all_models_and_providers()
         
         # 转换为OpenAI格式的模型列表
         models = []
@@ -91,7 +94,8 @@ async def list_models():
 async def get_api_key_stats():
     """获取API密钥统计信息"""
     try:
-        stats = ApiKeyService.get_api_key_stats()
+        api_key_service = service_factory.get_api_key_service()
+        stats = api_key_service.get_api_key_stats()
         return stats
     except Exception as e:
         logger.error(f"获取API密钥统计失败: {e}")

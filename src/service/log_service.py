@@ -6,16 +6,19 @@ Log Service - 日志管理业务逻辑层
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+from functools import lru_cache
 from src.dao.log_dao import LogDAO
 from src.models.log import ApiRequestLog
 from src.utils.logging import logger
 
 
 class LogService:
-    """日志管理服务"""
+    """日志管理服务 - 支持缓存和批量处理"""
     
-    def __init__(self):
-        self.dao = LogDAO()
+    def __init__(self, log_dao: Optional[LogDAO] = None):
+        self.dao = log_dao or LogDAO()
+        self._stats_cache = {}
+        self._cache_ttl = timedelta(minutes=5)
     
     def create_request_log(
         self,
@@ -35,9 +38,9 @@ class LogService:
         provider: str = None,
         **kwargs  # 接受额外的参数但忽略它们
     ) -> ApiRequestLog:
-        """创建请求日志"""
+        """创建请求日志（创建后清除相关缓存）"""
         try:
-            return self.dao.create_request_log(
+            result = self.dao.create_request_log(
                 source_api=source_api,
                 target_api=target_api,
                 source_model=source_model,
@@ -49,6 +52,11 @@ class LogService:
                 error_message=error_message,
                 processing_time=processing_time
             )
+            
+            # 清除相关缓存以保持数据一致性
+            self._invalidate_cache()
+            
+            return result
         except Exception as e:
             logger.error(f"创建请求日志失败: {e}")
             raise
@@ -107,62 +115,84 @@ class LogService:
             logger.error(f"分页获取日志失败: {e}")
             raise
     
+    def _get_cache_key(self, prefix: str, **kwargs) -> str:
+        """生成缓存键"""
+        params = '_'.join(f"{k}:{v}" for k, v in sorted(kwargs.items()))
+        return f"{prefix}_{params}"
+    
+    def _is_cache_valid(self, cache_key: str) -> bool:
+        """检查缓存是否有效"""
+        if cache_key not in self._stats_cache:
+            return False
+        
+        timestamp, _ = self._stats_cache[cache_key]
+        return datetime.now() - timestamp < self._cache_ttl
+    
+    def _get_cached_stats(self, cache_key: str) -> Optional[List[Dict[str, Any]]]:
+        """从缓存获取统计信息"""
+        if self._is_cache_valid(cache_key):
+            return self._stats_cache[cache_key][1]
+        return None
+    
+    def _set_cached_stats(self, cache_key: str, data: List[Dict[str, Any]]):
+        """设置缓存统计信息"""
+        self._stats_cache[cache_key] = (datetime.now(), data)
+    
+    def _invalidate_cache(self):
+        """清除所有缓存"""
+        self._stats_cache.clear()
+    
     def get_daily_stats(self, days: int = 7) -> List[Dict[str, Any]]:
-        """获取每日统计"""
+        """获取每日统计（带缓存）"""
         try:
             if days < 1 or days > 365:
                 days = 7
             
-            return self.dao.get_daily_stats(days)
+            cache_key = self._get_cache_key("daily_stats", days=days)
+            cached = self._get_cached_stats(cache_key)
+            if cached is not None:
+                return cached
+            
+            result = self.dao.get_daily_stats(days)
+            self._set_cached_stats(cache_key, result)
+            return result
         except Exception as e:
             logger.error(f"获取每日统计失败: {e}")
             raise
     
     def get_model_usage_stats(self, days: int = 7) -> List[Dict[str, Any]]:
-        """获取模型使用统计"""
+        """获取模型使用统计（带缓存）"""
         try:
             if days < 1 or days > 365:
                 days = 7
             
-            return self.dao.get_model_usage_stats(days)
+            cache_key = self._get_cache_key("model_usage_stats", days=days)
+            cached = self._get_cached_stats(cache_key)
+            if cached is not None:
+                return cached
+            
+            result = self.dao.get_model_usage_stats(days)
+            self._set_cached_stats(cache_key, result)
+            return result
         except Exception as e:
             logger.error(f"获取模型使用统计失败: {e}")
             raise
     
     def get_error_stats(self, days: int = 7) -> List[Dict[str, Any]]:
-        """获取错误统计"""
+        """获取错误统计（带缓存和优化）"""
         try:
             if days < 1 or days > 365:
                 days = 7
             
-            # 获取错误状态码统计
-            filters = {
-                'start_time': (datetime.now() - timedelta(days=days)).isoformat(),
-                'error_only': True
-            }
+            cache_key = self._get_cache_key("error_stats", days=days)
+            cached = self._get_cached_stats(cache_key)
+            if cached is not None:
+                return cached
             
-            result = self.dao.get_logs_paginated(1, 1000, **filters)
-            logs = result["items"]
-            
-            # 统计错误类型
-            error_stats = {}
-            for log in logs:
-                status_code = log.get('status_code') or 'unknown'
-                if status_code not in error_stats:
-                    error_stats[status_code] = {
-                        'status_code': status_code,
-                        'count': 0,
-                        'percentage': 0
-                    }
-                error_stats[status_code]['count'] += 1
-            
-            # 计算百分比
-            total_errors = sum(stat['count'] for stat in error_stats.values())
-            if total_errors > 0:
-                for stat in error_stats.values():
-                    stat['percentage'] = round((stat['count'] / total_errors) * 100, 2)
-            
-            return list(error_stats.values())
+            # 使用DAO的聚合查询优化性能
+            result = self.dao.get_error_stats(days)
+            self._set_cached_stats(cache_key, result)
+            return result
         except Exception as e:
             logger.error(f"获取错误统计失败: {e}")
             raise
@@ -179,10 +209,15 @@ class LogService:
             raise
     
     def get_api_performance_stats(self, days: int = 7) -> List[Dict[str, Any]]:
-        """获取API性能统计"""
+        """获取API性能统计（带缓存）"""
         try:
             if days < 1 or days > 365:
                 days = 7
+            
+            cache_key = self._get_cache_key("api_performance_stats", days=days)
+            cached = self._get_cached_stats(cache_key)
+            if cached is not None:
+                return cached
             
             # 获取最近N天的日志
             filters = {
@@ -230,7 +265,9 @@ class LogService:
                 # 移除临时字段
                 del stat['total_processing_time']
             
-            return list(api_stats.values())
+            result_list = list(api_stats.values())
+            self._set_cached_stats(cache_key, result_list)
+            return result_list
         except Exception as e:
             logger.error(f"获取API性能统计失败: {e}")
             raise

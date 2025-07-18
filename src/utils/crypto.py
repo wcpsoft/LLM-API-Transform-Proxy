@@ -6,6 +6,11 @@
 import hashlib
 import secrets
 import string
+import base64
+import os
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from typing import Optional
 
 
@@ -89,6 +94,104 @@ class SM3Crypto:
             密码哈希值
         """
         return SM3Crypto.hash(password)
+
+
+class ApiKeyEncryption:
+    """API密钥加密工具类"""
+    
+    def __init__(self, master_key: Optional[str] = None):
+        """初始化加密器
+        
+        Args:
+            master_key: 主密钥，如果为None则从环境变量获取
+        """
+        if master_key is None:
+            master_key = os.environ.get('API_KEY_MASTER_KEY')
+            if not master_key:
+                # 生成默认密钥（生产环境应该使用更安全的方式）
+                master_key = 'default-master-key-change-in-production'
+        
+        # 使用PBKDF2从主密钥派生加密密钥
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=b'api_key_salt',  # 生产环境应该使用随机盐
+            iterations=100000,
+        )
+        key = base64.urlsafe_b64encode(kdf.derive(master_key.encode()))
+        self._fernet = Fernet(key)
+    
+    def encrypt_key(self, api_key: str) -> str:
+        """加密API密钥
+        
+        Args:
+            api_key: 明文API密钥
+            
+        Returns:
+            加密后的API密钥（base64编码）
+        """
+        try:
+            encrypted = self._fernet.encrypt(api_key.encode())
+            return base64.urlsafe_b64encode(encrypted).decode()
+        except Exception as e:
+            raise ValueError(f"API密钥加密失败: {e}")
+    
+    def decrypt_key(self, encrypted_key: str) -> str:
+        """解密API密钥
+        
+        Args:
+            encrypted_key: 加密的API密钥
+            
+        Returns:
+            明文API密钥
+        """
+        try:
+            encrypted_bytes = base64.urlsafe_b64decode(encrypted_key.encode())
+            decrypted = self._fernet.decrypt(encrypted_bytes)
+            return decrypted.decode()
+        except Exception as e:
+            raise ValueError(f"API密钥解密失败: {e}")
+    
+    @staticmethod
+    def mask_key(api_key: str, show_chars: int = 4) -> str:
+        """遮蔽API密钥用于日志显示
+        
+        Args:
+            api_key: API密钥
+            show_chars: 显示的字符数
+            
+        Returns:
+            遮蔽后的密钥
+        """
+        if not api_key or len(api_key) <= show_chars:
+            return "****"
+        
+        return api_key[:show_chars] + "*" * (len(api_key) - show_chars)
+    
+    @staticmethod
+    def validate_key_strength(api_key: str) -> tuple[bool, str]:
+        """验证API密钥强度
+        
+        Args:
+            api_key: API密钥
+            
+        Returns:
+            (是否有效, 错误信息)
+        """
+        if not api_key:
+            return False, "API密钥不能为空"
+        
+        if len(api_key) < 10:
+            return False, "API密钥长度不能少于10个字符"
+        
+        # 检查是否包含明显的测试或演示密钥
+        test_patterns = ['demo', 'test', 'example', 'replace', 'your-key']
+        api_key_lower = api_key.lower()
+        for pattern in test_patterns:
+            if pattern in api_key_lower:
+                return False, f"API密钥不能包含测试标识: {pattern}"
+        
+        return True, ""
 
 
 def install_sm3_library():
